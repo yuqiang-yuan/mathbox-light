@@ -11,9 +11,11 @@ import { ObjectRenderer } from "./base.js";
 import { sampleParametric } from "../core/sampling.js";
 import type { Evaluator, EvalScope } from "../core/evaluator.js";
 import { hexToColor } from "../core/color.js";
+import { makeLabelSprite } from "../core/label.js";
 
 export class ParametricRenderer extends ObjectRenderer<ParametricCurveObject> {
     private line: Line2 | null = null;
+    private labelSprite: THREE.Sprite | null = null;
     private material: LineMaterial;
     private evaluator: Evaluator;
     private scope: EvalScope;
@@ -37,6 +39,7 @@ export class ParametricRenderer extends ObjectRenderer<ParametricCurveObject> {
     update(obj: ParametricCurveObject): void {
         const data = sampleParametric(obj, this.evaluator, this.scope);
         this.disposeLine();
+        this.disposeLabel();
 
         const geom = new LineGeometry();
         geom.setPositions(Array.from(data.positions));
@@ -47,6 +50,17 @@ export class ParametricRenderer extends ObjectRenderer<ParametricCurveObject> {
         this.line = new Line2(geom, this.material);
         this.line.computeLineDistances();
         this.root.add(this.line);
+
+        // Label at the end of the curve
+        if (obj.showLabel && obj.label && data.positions.length >= 3) {
+            const lastIdx = data.positions.length - 3;
+            const x = data.positions[lastIdx];
+            const y = data.positions[lastIdx + 1];
+            const z = data.positions[lastIdx + 2];
+            this.labelSprite = makeLabelSprite(obj.label, obj.color, this.labelRenderer);
+            this.labelSprite.position.set(x + 0.1, y + 0.1, z);
+            this.root.add(this.labelSprite);
+        }
     }
 
     refresh(obj: ParametricCurveObject): void {
@@ -67,6 +81,7 @@ export class ParametricRenderer extends ObjectRenderer<ParametricCurveObject> {
 
     dispose(): void {
         this.disposeLine();
+        this.disposeLabel();
         this.material.dispose();
     }
 
@@ -75,6 +90,15 @@ export class ParametricRenderer extends ObjectRenderer<ParametricCurveObject> {
             this.root.remove(this.line);
             this.line.geometry.dispose();
             this.line = null;
+        }
+    }
+
+    private disposeLabel(): void {
+        if (this.labelSprite) {
+            this.root.remove(this.labelSprite);
+            this.labelSprite.material.map?.dispose();
+            this.labelSprite.material.dispose();
+            this.labelSprite = null;
         }
     }
 }

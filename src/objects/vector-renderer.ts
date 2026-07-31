@@ -6,9 +6,11 @@ import * as THREE from "three";
 import type { VectorObject } from "../types/index.js";
 import { ObjectRenderer } from "./base.js";
 import { hexToColor } from "../core/color.js";
+import { makeLabelSprite } from "../core/label.js";
 
 export class VectorRenderer extends ObjectRenderer<VectorObject> {
     private arrow: THREE.ArrowHelper | null = null;
+    private labelSprite: THREE.Sprite | null = null;
     private lineMaterial: THREE.LineBasicMaterial;
 
     constructor(parent: THREE.Object3D) {
@@ -21,6 +23,7 @@ export class VectorRenderer extends ObjectRenderer<VectorObject> {
 
     update(obj: VectorObject): void {
         this.disposeArrow();
+        this.disposeLabel();
 
         const dir = new THREE.Vector3(
             obj.head[0] - obj.tail[0],
@@ -54,6 +57,13 @@ export class VectorRenderer extends ObjectRenderer<VectorObject> {
         coneMat.opacity = obj.opacity;
 
         this.root.add(this.arrow);
+
+        // Label at the head of the vector
+        if (obj.showLabel && obj.label) {
+            this.labelSprite = makeLabelSprite(obj.label, obj.color, this.labelRenderer);
+            this.labelSprite.position.set(obj.head[0] + 0.1, obj.head[1] + 0.1, obj.head[2]);
+            this.root.add(this.labelSprite);
+        }
     }
 
     refresh(obj: VectorObject): void {
@@ -66,6 +76,7 @@ export class VectorRenderer extends ObjectRenderer<VectorObject> {
 
     dispose(): void {
         this.disposeArrow();
+        this.disposeLabel();
         this.lineMaterial.dispose();
     }
 
@@ -74,6 +85,15 @@ export class VectorRenderer extends ObjectRenderer<VectorObject> {
             this.root.remove(this.arrow);
             this.arrow.dispose();
             this.arrow = null;
+        }
+    }
+
+    private disposeLabel(): void {
+        if (this.labelSprite) {
+            this.root.remove(this.labelSprite);
+            this.labelSprite.material.map?.dispose();
+            this.labelSprite.material.dispose();
+            this.labelSprite = null;
         }
     }
 }

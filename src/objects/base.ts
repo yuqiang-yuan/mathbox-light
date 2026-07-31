@@ -8,13 +8,20 @@
 
 import { Object3D } from "three";
 import type { SceneObject } from "../types/index.js";
+import type { LabelRenderer } from "../core/label.js";
 
 export abstract class ObjectRenderer<T extends SceneObject = SceneObject> {
     protected readonly root: Object3D;
+    protected labelRenderer?: LabelRenderer;
 
     constructor(parent: Object3D) {
         this.root = new Object3D();
         parent.add(this.root);
+    }
+
+    /** Set the label renderer (for LaTeX/custom label rendering). */
+    setLabelRenderer(renderer?: LabelRenderer): void {
+        this.labelRenderer = renderer;
     }
 
     /** Build / rebuild three.js objects from the scene object definition. */

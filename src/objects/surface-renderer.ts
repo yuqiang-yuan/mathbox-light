@@ -11,9 +11,11 @@ import { ObjectRenderer } from "./base.js";
 import { sampleSurface } from "../core/sampling.js";
 import type { Evaluator, EvalScope } from "../core/evaluator.js";
 import { hexToColor } from "../core/color.js";
+import { makeLabelSprite } from "../core/label.js";
 
 export class SurfaceRenderer extends ObjectRenderer<SurfaceObject> {
     private mesh: THREE.Mesh | null = null;
+    private labelSprite: THREE.Sprite | null = null;
     private material: THREE.MeshStandardMaterial;
     private wireMaterial: THREE.LineBasicMaterial;
     private evaluator: Evaluator;
@@ -41,6 +43,7 @@ export class SurfaceRenderer extends ObjectRenderer<SurfaceObject> {
 
     update(obj: SurfaceObject): void {
         const data = sampleSurface(obj, this.evaluator, this.scope);
+        this.disposeLabel();
         this.disposeMesh();
 
         const geometry = new THREE.BufferGeometry();
@@ -58,6 +61,15 @@ export class SurfaceRenderer extends ObjectRenderer<SurfaceObject> {
         const wireGeom = new THREE.WireframeGeometry(geometry);
         const wire = new THREE.LineSegments(wireGeom, this.wireMaterial);
         this.root.add(wire);
+
+        // Label at the center of the surface
+        if (obj.showLabel && obj.label) {
+            const cx = (obj.domainX[0] + obj.domainX[1]) / 2;
+            const cy = (obj.domainY[0] + obj.domainY[1]) / 2;
+            this.labelSprite = makeLabelSprite(obj.label, obj.color, this.labelRenderer);
+            this.labelSprite.position.set(cx + 0.1, cy + 0.1, 0);
+            this.root.add(this.labelSprite);
+        }
     }
 
     refresh(obj: SurfaceObject): void {
@@ -69,6 +81,7 @@ export class SurfaceRenderer extends ObjectRenderer<SurfaceObject> {
     }
 
     dispose(): void {
+        this.disposeLabel();
         this.disposeMesh();
         this.material.dispose();
         this.wireMaterial.dispose();
@@ -85,5 +98,14 @@ export class SurfaceRenderer extends ObjectRenderer<SurfaceObject> {
         }
         this.root.clear();
         this.mesh = null;
+    }
+
+    private disposeLabel(): void {
+        if (this.labelSprite) {
+            this.root.remove(this.labelSprite);
+            this.labelSprite.material.map?.dispose();
+            this.labelSprite.material.dispose();
+            this.labelSprite = null;
+        }
     }
 }

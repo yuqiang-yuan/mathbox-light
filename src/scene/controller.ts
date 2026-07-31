@@ -53,6 +53,7 @@ export class MathBoxController {
     private disposed = false;
     /** Snapshot of last applied camera config, to detect panel-driven changes. */
     private lastCameraConfig: { position: Vec3; lookAt: Vec3; originPosition: [number, number] | undefined };
+    private labelRenderer?: LabelRenderer;
 
     constructor(container: HTMLElement, scene: MathScene, options?: MathBoxControllerOptions) {
         registerDefaultRenderers();
@@ -64,6 +65,7 @@ export class MathBoxController {
         this.env = new SceneEnvironment(container, scene, { width, height, labelRenderer: options?.labelRenderer });
         this.scene = scene;
         this.evaluator = new SimpleEvaluator();
+        this.labelRenderer = options?.labelRenderer ?? undefined;
         this.lastCameraConfig = { position: [0,0,0], lookAt: [0,0,0], originPosition: undefined };
         this.syncCameraSnapshot(scene.config.camera);
 
@@ -99,6 +101,7 @@ export class MathBoxController {
     private createRendererFor(obj: SceneObject, scope: EvalScope, w: number, h: number): void {
         const renderer = createRenderer(obj.type, this.objectsRoot, this.evaluator, scope, Math.max(w, h));
         if (!renderer) return;
+        renderer.setLabelRenderer(this.labelRenderer);
         renderer.update(obj);
         renderer.setVisible(obj.visible);
         this.renderers.set(obj.id, renderer);

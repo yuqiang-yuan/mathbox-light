@@ -9,9 +9,11 @@ import { LineGeometry } from "three/examples/jsm/lines/LineGeometry.js";
 import type { LineObject } from "../types/index.js";
 import { ObjectRenderer } from "./base.js";
 import { hexToColor } from "../core/color.js";
+import { makeLabelSprite } from "../core/label.js";
 
 export class LineRenderer extends ObjectRenderer<LineObject> {
     private line: Line2 | null = null;
+    private labelSprite: THREE.Sprite | null = null;
     private material: LineMaterial;
     private resolution: number;
 
@@ -30,6 +32,7 @@ export class LineRenderer extends ObjectRenderer<LineObject> {
 
     update(obj: LineObject): void {
         this.disposeLine();
+        this.disposeLabel();
         const geom = new LineGeometry();
         geom.setPositions([...obj.start, ...obj.end]);
         this.material.color = hexToColor(obj.color);
@@ -38,6 +41,18 @@ export class LineRenderer extends ObjectRenderer<LineObject> {
 
         this.line = new Line2(geom, this.material);
         this.root.add(this.line);
+
+        // Label at the midpoint
+        if (obj.showLabel && obj.label) {
+            const mid: [number, number, number] = [
+                (obj.start[0] + obj.end[0]) / 2 + 0.1,
+                (obj.start[1] + obj.end[1]) / 2 + 0.1,
+                (obj.start[2] + obj.end[2]) / 2,
+            ];
+            this.labelSprite = makeLabelSprite(obj.label, obj.color, this.labelRenderer);
+            this.labelSprite.position.set(...mid);
+            this.root.add(this.labelSprite);
+        }
     }
 
     refresh(_obj: LineObject): void {
@@ -54,6 +69,7 @@ export class LineRenderer extends ObjectRenderer<LineObject> {
 
     dispose(): void {
         this.disposeLine();
+        this.disposeLabel();
         this.material.dispose();
     }
 
@@ -62,6 +78,15 @@ export class LineRenderer extends ObjectRenderer<LineObject> {
             this.root.remove(this.line);
             this.line.geometry.dispose();
             this.line = null;
+        }
+    }
+
+    private disposeLabel(): void {
+        if (this.labelSprite) {
+            this.root.remove(this.labelSprite);
+            this.labelSprite.material.map?.dispose();
+            this.labelSprite.material.dispose();
+            this.labelSprite = null;
         }
     }
 }
