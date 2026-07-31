@@ -12,6 +12,7 @@ export type {
     HexColor,
     Vec3,
     Range,
+    Bounds3D,
     SceneObjectBase,
     FunctionObject,
     SurfaceObject,
@@ -24,6 +25,8 @@ export type {
     Parameter,
     AxisConfig,
     CoordinateSystem,
+    GridPlaneConfig,
+    GridConfig,
     SceneConfig,
     MathScene,
 } from "./types/index.js";
@@ -33,6 +36,25 @@ export { SimpleEvaluator } from "./core/evaluator.js";
 export type { Evaluator, EvalScope } from "./core/evaluator.js";
 export { sampleFunction, sampleSurface, sampleParametric } from "./core/sampling.js";
 export { hexToColor, hexToNumber } from "./core/color.js";
+export { sceneBounds, computeAutoFit } from "./core/bounds.js";
+export type { AutoFitResult } from "./core/bounds.js";
+
+// Helpers
+export function vec3ToString(v: import("./types/index.js").Vec3): string {
+    const [x, y, z] = v;
+    return `(${x.toFixed(2)}, ${y.toFixed(2)}, ${z.toFixed(2)})`;
+}
+
+/** Parse a Vec3 from a string like "(1, 2, 3)" or "1, 2, 3". Values that cannot be parsed default to 0. */
+export function vec3FromString(s: string): import("./types/index.js").Vec3 {
+    const cleaned = s.replace(/[()[\]\s]/g, "");
+    const parts = cleaned.split(",");
+    const parse = (i: number): number => {
+        const v = parseFloat(parts[i]);
+        return Number.isNaN(v) ? 0 : v;
+    };
+    return [parse(0), parse(1), parse(2)];
+}
 
 // Objects
 export { ObjectRenderer } from "./objects/base.js";
@@ -47,7 +69,7 @@ export type { RendererFactory } from "./objects/registry.js";
 
 // Scene
 export { SceneEnvironment } from "./scene/environment.js";
-export type { SceneEnvironmentOptions } from "./scene/environment.js";
+export type { SceneEnvironmentOptions, LabelRenderer } from "./scene/environment.js";
 export { MathBoxController } from "./scene/controller.js";
 
 // Convenience: create a default scene for testing
@@ -56,12 +78,18 @@ export function createDefaultScene(): import("./types/index.js").MathScene {
         version: 1,
         config: {
             coordinateSystem: "cartesian",
+            dimension: "2D",
             axes: {
-                x: { visible: true, range: [-5, 5], scale: 1, label: "x" },
-                y: { visible: true, range: [-3, 3], scale: 1, label: "y" },
-                z: { visible: true, range: [-3, 3], scale: 1, label: "z" },
+                x: { visible: true, range: [-5, 5], scale: 1, label: "x", color: "#cc5555" },
+                y: { visible: true, range: [-3, 3], scale: 1, label: "y", color: "#5577cc" },
+                z: { visible: true, range: [-3, 3], scale: 1, label: "z", color: "#55aa55" },
             },
-            grid: { visible: true },
+            grid: {
+                visible: true,
+                xy: { visible: true, step: 1, color: "#cccccc", opacity: 0.5 },
+                xz: { visible: true, step: 1, color: "#cccccc", opacity: 0.5 },
+                yz: { visible: true, step: 1, color: "#cccccc", opacity: 0.5 },
+            },
             camera: {
                 canRotate: true,
                 canZoom: true,

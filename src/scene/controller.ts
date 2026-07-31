@@ -8,7 +8,7 @@
  * 4. Supports scene updates (add/remove/modify objects) via `updateScene()`.
  *
  * Usage:
- *   const controller = new MathBoxController(container, scene);
+ *   const controller = new MathBoxController(container, scene, { labelRenderer });
  *   controller.start();
  *   // ... later, when scene changes:
  *   controller.updateScene(newScene);
@@ -17,12 +17,31 @@
  */
 
 import * as THREE from "three";
-import type { MathScene, SceneObject, Parameter } from "../types/index.js";
+import type { MathScene, SceneObject, Parameter, Vec3 } from "../types/index.js";
 import { SceneEnvironment } from "./environment.js";
+import type { LabelRenderer } from "./environment.js";
 import { SimpleEvaluator } from "../core/evaluator.js";
 import type { Evaluator, EvalScope } from "../core/evaluator.js";
+import { sceneBounds, computeAutoFit } from "../core/bounds.js";
 import { createRenderer, registerDefaultRenderers } from "../objects/registry.js";
 import type { ObjectRenderer } from "../objects/base.js";
+
+export interface MathBoxControllerOptions {
+    /** Custom label renderer (e.g. for LaTeX/KaTeX support). */
+    labelRenderer?: LabelRenderer | null;
+}
+
+/** Compare two Vec3 arrays for equality. */
+function vec3Equal(a: Vec3, b: Vec3): boolean {
+    return a[0] === b[0] && a[1] === b[1] && a[2] === b[2];
+}
+
+/** Compare two originPosition tuples for equality. */
+function originEqual(a: [number, number] | undefined, b: [number, number] | undefined): boolean {
+    if (!a && !b) return true;
+    if (!a || !b) return false;
+    return a[0] === b[0] && a[1] === b[1];
+}
 
 export class MathBoxController {
     private env: SceneEnvironment;
@@ -32,23 +51,32 @@ export class MathBoxController {
     private objectsRoot: THREE.Group;
     private animationId = 0;
     private disposed = false;
+    /** Snapshot of last applied camera config, to detect panel-driven changes. */
+    private lastCameraConfig: { position: Vec3; lookAt: Vec3; originPosition: [number, number] | undefined };
 
-    constructor(container: HTMLElement, scene: MathScene) {
+    constructor(container: HTMLElement, scene: MathScene, options?: MathBoxControllerOptions) {
         registerDefaultRenderers();
 
         const rect = container.getBoundingClientRect();
         const width = rect.width || container.clientWidth || 800;
         const height = rect.height || container.clientHeight || 400;
 
-        this.env = new SceneEnvironment(container, scene, { width, height });
+        this.env = new SceneEnvironment(container, scene, { width, height, labelRenderer: options?.labelRenderer });
         this.scene = scene;
         this.evaluator = new SimpleEvaluator();
+        this.lastCameraConfig = { position: [0,0,0], lookAt: [0,0,0], originPosition: undefined };
+        this.syncCameraSnapshot(scene.config.camera);
 
         // Root group for all object renderers
         this.objectsRoot = new THREE.Group();
         this.env.scene.add(this.objectsRoot);
 
         this.buildRenderers();
+
+        // Auto-fit camera after renderers are built
+        if (scene.config.camera.autoFit) {
+            this.runAutoFit();
+        }
     }
 
     private getScope(): EvalScope {
@@ -80,8 +108,7 @@ export class MathBoxController {
     updateScene(scene: MathScene): void {
         this.scene = scene;
 
-        // Update environment (camera, axes, grid)
-        this.env.updateCamera(scene);
+        // Axes + grid always update
         this.env.updateAxes(scene);
         this.env.updateGrid(scene);
 
@@ -107,6 +134,30 @@ export class MathBoxController {
                 this.createRendererFor(obj, scope, w, h);
             }
         }
+
+        // Camera: only apply when the panel-driven config actually changed.
+        // This preserves the user's mouse-driven camera state (orbit/pan/zoom).
+        const cam = scene.config.camera;
+        const posChanged = !vec3Equal(cam.position, this.lastCameraConfig.position);
+        const lookChanged = !vec3Equal(cam.lookAt, this.lastCameraConfig.lookAt);
+        const originChanged = !originEqual(cam.originPosition, this.lastCameraConfig.originPosition);
+
+        if (cam.autoFit) {
+            this.runAutoFit();
+            this.syncCameraSnapshot(cam);
+        } else if (posChanged || lookChanged || originChanged) {
+            this.env.updateCamera(scene);
+            this.syncCameraSnapshot(cam);
+        }
+    }
+
+    /** Update lastCameraConfig snapshot from scene camera config. */
+    private syncCameraSnapshot(cam: MathScene["config"]["camera"]): void {
+        this.lastCameraConfig = {
+            position: [...cam.position] as Vec3,
+            lookAt: [...cam.lookAt] as Vec3,
+            originPosition: cam.originPosition ? [...cam.originPosition] as [number, number] : undefined,
+        };
     }
 
     /** Update parameter values (for slider interaction). */
@@ -118,6 +169,20 @@ export class MathBoxController {
                 renderer.refresh(obj);
             }
         }
+    }
+
+    /** Compute bounds and apply auto-fit camera. */
+    private runAutoFit(): void {
+        const bounds = sceneBounds(this.scene);
+        const { fov, aspect } = this.env.camera;
+        const dimension = this.scene.config.dimension;
+        const result = computeAutoFit(bounds, fov, aspect, dimension);
+        this.env.applyAutoFit(result.position, result.lookAt, result.originPosition, dimension);
+    }
+
+    /** Reset camera to auto-fit view (e.g. after user has moved/zoomed). */
+    resetView(): void {
+        this.runAutoFit();
     }
 
     /** Start the render loop. */

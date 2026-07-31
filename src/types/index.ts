@@ -18,6 +18,12 @@ export type Vec3 = [number, number, number];
 /** Numeric range [min, max]. */
 export type Range = [number, number];
 
+/** 3D bounding box. */
+export interface Bounds3D {
+    min: Vec3;
+    max: Vec3;
+}
+
 // ============================================================================
 // Scene Objects (visual elements)
 // ============================================================================
@@ -168,6 +174,8 @@ export interface AxisConfig {
     scale: number;
     /** Axis label (mixed text + LaTeX). */
     label?: string;
+    /** Axis color as a hex string (e.g. "#cc5555"). Defaults to black. */
+    color?: HexColor;
 }
 
 /**
@@ -185,23 +193,61 @@ export interface AxisConfig {
  */
 export type CoordinateSystem = "cartesian" | "polar" | "spherical";
 
+export interface GridPlaneConfig {
+    visible: boolean;
+    /** Spacing between grid lines in world units. */
+    step: number;
+    /** Grid line color as a hex string (e.g. "#cccccc"). */
+    color?: HexColor;
+    /** Grid line opacity, 0–1. */
+    opacity?: number;
+}
+
+export interface GridConfig {
+    /** Master toggle — when false, all planes are hidden. */
+    visible: boolean;
+    /** XY plane (z = 0). Omit to use defaults. */
+    xy?: GridPlaneConfig;
+    /** XZ plane (y = 0). Omit to use defaults. */
+    xz?: GridPlaneConfig;
+    /** YZ plane (x = 0). Omit to use defaults. */
+    yz?: GridPlaneConfig;
+}
+
 export interface SceneConfig {
     /** Coordinate system for interpreting expressions. */
     coordinateSystem: CoordinateSystem;
+    /**
+     * Scene dimension mode.
+     * - "2D": camera looks straight down the z-axis, z-axis data ignored by autoFit.
+     * - "3D": camera uses perspective view at an angle.
+     */
+    dimension: "2D" | "3D";
     axes: {
         x: AxisConfig;
         y: AxisConfig;
         z: AxisConfig;
     };
-    grid: {
-        visible: boolean;
-    };
+    grid: GridConfig;
     camera: {
         canRotate: boolean;
         canZoom: boolean;
         canPan: boolean;
         position: Vec3;
         lookAt: Vec3;
+        /**
+         * Fractional position of the world origin on screen, [0–1, 0–1].
+         * [0.5, 0.5] = centered (default). [0.3, 0.3] = origin toward lower-left.
+         * When set, camera position/lookAt are computed to place the origin
+         * at this screen position instead of using raw position/lookAt.
+         */
+        originPosition?: [number, number];
+        /**
+         * When true, camera position/lookAt/originPosition are computed
+         * automatically from the bounding box of all scene objects.
+         * Overrides manual position/lookAt/originPosition.
+         */
+        autoFit?: boolean;
     };
 }
 
