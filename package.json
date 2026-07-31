@@ -1,0 +1,35 @@
+{
+  "name": "mathbox-light",
+  "version": "0.1.0",
+  "description": "Lightweight TypeScript math visualization library built on three.js r185",
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc",
+    "check": "tsc --noEmit",
+    "prepublishOnly": "yarn run build"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "dependencies": {
+    "three": "^0.185.0"
+  },
+  "devDependencies": {
+    "@types/three": "^0.185.1",
+    "typescript": "^5.6.0"
+  },
+  "peerDependencies": {
+    "three": ">=0.160.0"
+  }
+}
