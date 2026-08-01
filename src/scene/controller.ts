@@ -69,8 +69,10 @@ export class MathBoxController {
         this.lastCameraConfig = { position: [0,0,0], lookAt: [0,0,0], originPosition: undefined };
         this.syncCameraSnapshot(scene.config.camera);
 
-        // Root group for all object renderers
+        // Root group for all object renderers.
+        // Scaled by per-axis scale so objects match the axis/grid visual scaling.
         this.objectsRoot = new THREE.Group();
+        this.applyAxisScales();
         this.env.scene.add(this.objectsRoot);
 
         this.buildRenderers();
@@ -114,6 +116,7 @@ export class MathBoxController {
         // Axes + grid always update
         this.env.updateAxes(scene);
         this.env.updateGrid(scene);
+        this.applyAxisScales();
 
         const scope = this.getScope();
         const [w, h] = this.env.getResolution();
@@ -152,6 +155,13 @@ export class MathBoxController {
             this.env.updateCamera(scene);
             this.syncCameraSnapshot(cam);
         }
+    }
+
+    /** Apply per-axis scale to the objectsRoot group so rendered objects
+     *  match the visual scaling of axes and grid. */
+    private applyAxisScales(): void {
+        const { x, y, z } = this.scene.config.axes;
+        this.objectsRoot.scale.set(x.scale, y.scale, z.scale);
     }
 
     /** Update lastCameraConfig snapshot from scene camera config. */

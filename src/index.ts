@@ -10,6 +10,7 @@
 // Types
 export type {
     HexColor,
+    ColormapName,
     Vec3,
     Range,
     Bounds3D,
@@ -35,7 +36,7 @@ export type {
 export { SimpleEvaluator } from "./core/evaluator.js";
 export type { Evaluator, EvalScope } from "./core/evaluator.js";
 export { sampleFunction, sampleSurface, sampleParametric } from "./core/sampling.js";
-export { hexToColor, hexToNumber } from "./core/color.js";
+export { hexToColor, hexToNumber, colormapAt, COLORMAP_NAMES } from "./core/color.js";
 export { sceneBounds, computeAutoFit } from "./core/bounds.js";
 export type { AutoFitResult } from "./core/bounds.js";
 

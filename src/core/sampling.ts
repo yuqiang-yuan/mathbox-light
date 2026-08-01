@@ -3,8 +3,9 @@
  * typed-array vertex data ready for GPU upload.
  */
 
-import type { FunctionObject, SurfaceObject, ParametricCurveObject } from "../types/index.js";
+import type { FunctionObject, SurfaceObject, ParametricCurveObject, ColormapName } from "../types/index.js";
 import type { Evaluator, EvalScope } from "./evaluator.js";
+import { colormapAt } from "./color.js";
 
 export interface LineGeometryData {
     positions: Float32Array; // [x,y,z, x,y,z, ...]
@@ -14,6 +15,7 @@ export interface LineGeometryData {
 export interface SurfaceGeometryData {
     positions: Float32Array;
     indices: Uint32Array;
+    colors: Float32Array | null; // per-vertex RGB when colormap is set, null otherwise
     width: number;  // samples in x
     height: number; // samples in y
 }
@@ -53,6 +55,8 @@ export function sampleSurface(
     const dy = (yMax - yMin) / (ny - 1);
 
     const positions = new Float32Array(nx * ny * 3);
+    let zMin = Infinity;
+    let zMax = -Infinity;
     let p = 0;
     for (let j = 0; j < ny; j++) {
         const y = yMin + j * dy;
@@ -62,6 +66,8 @@ export function sampleSurface(
             positions[p++] = x;
             positions[p++] = y;
             positions[p++] = z;
+            if (z < zMin) zMin = z;
+            if (z > zMax) zMax = z;
         }
     }
 
@@ -79,7 +85,24 @@ export function sampleSurface(
         }
     }
 
-    return { positions, indices, width: nx, height: ny };
+    // Per-vertex colormap colors
+    let colors: Float32Array | null = null;
+    if (obj.colormap) {
+        const cm: ColormapName = obj.colormap;
+        const zRange = zMax - zMin;
+        colors = new Float32Array(nx * ny * 3);
+        let ci = 0;
+        for (let k = 0; k < nx * ny; k++) {
+            const z = positions[k * 3 + 2];
+            const t = zRange > 1e-10 ? (z - zMin) / zRange : 0.5;
+            const [r, g, b] = colormapAt(cm, t);
+            colors[ci++] = r;
+            colors[ci++] = g;
+            colors[ci++] = b;
+        }
+    }
+
+    return { positions, indices, colors, width: nx, height: ny };
 }
 
 /** Sample parametric (x(t), y(t), z(t)) → 3D line data. */

@@ -12,6 +12,13 @@
 /** RGB hex color, e.g. "#3b82f6". */
 export type HexColor = string;
 
+/**
+ * Colormap name for gradient surface coloring.
+ * When set on a SurfaceObject, per-vertex colors are computed by mapping
+ * the z value (normalized to [0,1]) through the colormap.
+ */
+export type ColormapName = "rainbow" | "viridis" | "heat" | "cool" | "grayscale";
+
 /** 3D vector / point position [x, y, z]. */
 export type Vec3 = [number, number, number];
 
@@ -77,6 +84,10 @@ export interface SurfaceObject extends SceneObjectBase {
     samplesX: number;
     /** Number of sample points along y. */
     samplesY: number;
+    /** Whether to show wireframe edges on the surface. Defaults to false. */
+    wireframe?: boolean;
+    /** Colormap for gradient coloring by z value. Omit for solid color. */
+    colormap?: ColormapName;
 }
 
 /** A parametric curve: (x(t), y(t), z(t)). */

@@ -2,7 +2,8 @@
  * Surface renderer: z = f(x, y).
  *
  * Produces a three.js Mesh with BufferGeometry, rendered as a
- * wireframe + filled surface with double-sided material.
+ * filled surface with double-sided material. An optional wireframe
+ * overlay can be enabled via the `wireframe` property.
  */
 
 import * as THREE from "three";
@@ -15,9 +16,10 @@ import { makeLabelSprite } from "../core/label.js";
 
 export class SurfaceRenderer extends ObjectRenderer<SurfaceObject> {
     private mesh: THREE.Mesh | null = null;
+    private wireframe: THREE.LineSegments | null = null;
     private labelSprite: THREE.Sprite | null = null;
     private material: THREE.MeshStandardMaterial;
-    private wireMaterial: THREE.LineBasicMaterial;
+    private wireMaterial: THREE.LineBasicMaterial | null = null;
     private evaluator: Evaluator;
     private scope: EvalScope;
 
@@ -34,11 +36,6 @@ export class SurfaceRenderer extends ObjectRenderer<SurfaceObject> {
             metalness: 0.0,
             roughness: 0.65,
         });
-        this.wireMaterial = new THREE.LineBasicMaterial({
-            color: 0x666666,
-            transparent: true,
-            opacity: 0.3,
-        });
     }
 
     update(obj: SurfaceObject): void {
@@ -48,19 +45,39 @@ export class SurfaceRenderer extends ObjectRenderer<SurfaceObject> {
 
         const geometry = new THREE.BufferGeometry();
         geometry.setAttribute("position", new THREE.BufferAttribute(data.positions, 3));
+        if (data.colors) {
+            geometry.setAttribute("color", new THREE.BufferAttribute(data.colors, 3));
+        }
         geometry.setIndex(new THREE.BufferAttribute(data.indices, 1));
         geometry.computeVertexNormals();
 
-        this.material.color = hexToColor(obj.color);
+        // When colormap is set, enable vertex colors; otherwise use solid color
+        if (obj.colormap && data.colors) {
+            this.material.vertexColors = true;
+            this.material.color.set(0xffffff); // white tint so vertex colors show true
+        } else {
+            this.material.vertexColors = false;
+            this.material.color = hexToColor(obj.color);
+        }
         this.material.opacity = obj.opacity;
+        this.material.needsUpdate = true;
 
         this.mesh = new THREE.Mesh(geometry, this.material);
         this.root.add(this.mesh);
 
-        // Wireframe overlay
-        const wireGeom = new THREE.WireframeGeometry(geometry);
-        const wire = new THREE.LineSegments(wireGeom, this.wireMaterial);
-        this.root.add(wire);
+        // Optional wireframe overlay
+        if (obj.wireframe) {
+            if (!this.wireMaterial) {
+                this.wireMaterial = new THREE.LineBasicMaterial({
+                    color: 0x666666,
+                    transparent: true,
+                    opacity: 0.3,
+                });
+            }
+            const wireGeom = new THREE.WireframeGeometry(geometry);
+            this.wireframe = new THREE.LineSegments(wireGeom, this.wireMaterial);
+            this.root.add(this.wireframe);
+        }
 
         // Label at the center of the surface
         if (obj.showLabel && obj.label) {
@@ -84,11 +101,11 @@ export class SurfaceRenderer extends ObjectRenderer<SurfaceObject> {
         this.disposeLabel();
         this.disposeMesh();
         this.material.dispose();
-        this.wireMaterial.dispose();
+        this.wireMaterial?.dispose();
     }
 
     private disposeMesh(): void {
-        // Dispose all children (mesh + wireframe)
+        // Dispose all children (mesh + optional wireframe)
         for (const child of this.root.children) {
             if (child instanceof THREE.Mesh) {
                 child.geometry.dispose();
@@ -98,6 +115,7 @@ export class SurfaceRenderer extends ObjectRenderer<SurfaceObject> {
         }
         this.root.clear();
         this.mesh = null;
+        this.wireframe = null;
     }
 
     private disposeLabel(): void {
