@@ -23,6 +23,7 @@
     "README.md"
   ],
   "dependencies": {
+    "mathjs": "^15.2.0",
     "three": "^0.185.0"
   },
   "devDependencies": {
