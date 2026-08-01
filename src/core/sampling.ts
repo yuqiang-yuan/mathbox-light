@@ -7,9 +7,22 @@ import type { FunctionObject, SurfaceObject, ParametricCurveObject, ColormapName
 import type { Evaluator, EvalScope } from "./evaluator.js";
 import { colormapAt } from "./color.js";
 
+/**
+ * Line data returned by curve samplers.
+ *
+ * Samples are split into contiguous segments at points where the evaluated
+ * value is non-finite (NaN / ±Infinity), e.g. `log(x, 10)` at x ≤ 0.
+ * Each segment is a flat Float32Array of [x,y,z, x,y,z, ...].
+ * `positions` is a convenience concatenation of all segments for backwards-
+ * compatible consumers that only need a flat array (e.g. label placement).
+ */
 export interface LineGeometryData {
-    positions: Float32Array; // [x,y,z, x,y,z, ...]
-    count: number;           // number of vertices
+    /** Contiguous vertex segments, split at non-finite values. */
+    segments: Float32Array[];
+    /** All vertices concatenated (for backwards compatibility). */
+    positions: Float32Array;
+    /** Total vertex count across all segments. */
+    count: number;
 }
 
 export interface SurfaceGeometryData {
@@ -28,17 +41,15 @@ export function sampleFunction(
 ): LineGeometryData {
     const [xMin, xMax] = obj.domain;
     const n = Math.max(2, obj.samples);
-    const positions = new Float32Array(n * 3);
     const dx = (xMax - xMin) / (n - 1);
 
+    const pts: number[] = [];
     for (let i = 0; i < n; i++) {
         const x = xMin + i * dx;
         const y = evaluator.eval(obj.expr, { ...scope, x });
-        positions[i * 3]     = x;
-        positions[i * 3 + 1] = y;
-        positions[i * 3 + 2] = 0;
+        pts.push(x, y, 0);
     }
-    return { positions, count: n };
+    return buildLineData(pts);
 }
 
 /** Sample z = f(x,y) → surface grid. */
@@ -63,11 +74,13 @@ export function sampleSurface(
         for (let i = 0; i < nx; i++) {
             const x = xMin + i * dx;
             const z = evaluator.eval(obj.expr, { ...scope, x, y });
+            // Clamp non-finite z to 0 to avoid NaN poisoning the GPU buffers.
+            const sz = Number.isFinite(z) ? z : 0;
             positions[p++] = x;
             positions[p++] = y;
-            positions[p++] = z;
-            if (z < zMin) zMin = z;
-            if (z > zMax) zMax = z;
+            positions[p++] = sz;
+            if (sz < zMin) zMin = sz;
+            if (sz > zMax) zMax = sz;
         }
     }
 
@@ -113,15 +126,60 @@ export function sampleParametric(
 ): LineGeometryData {
     const [tMin, tMax] = obj.domain;
     const n = Math.max(2, obj.samples);
-    const positions = new Float32Array(n * 3);
     const dt = (tMax - tMin) / (n - 1);
 
+    const pts: number[] = [];
     for (let i = 0; i < n; i++) {
         const t = tMin + i * dt;
         const s = { ...scope, t };
-        positions[i * 3]     = evaluator.eval(obj.exprX, s);
-        positions[i * 3 + 1] = evaluator.eval(obj.exprY, s);
-        positions[i * 3 + 2] = evaluator.eval(obj.exprZ, s);
+        pts.push(
+            evaluator.eval(obj.exprX, s),
+            evaluator.eval(obj.exprY, s),
+            evaluator.eval(obj.exprZ, s),
+        );
     }
-    return { positions, count: n };
+    return buildLineData(pts);
+}
+
+// ---------------------------------------------------------------------------
+
+/**
+ * Convert a flat [x,y,z, x,y,z, ...] array of sample points into
+ * LineGeometryData, splitting at any vertex that contains a non-finite
+ * component.  This prevents NaN/Infinity from reaching three.js geometry
+ * buffers, which would poison bounding-sphere / normal computations.
+ */
+function buildLineData(pts: number[]): LineGeometryData {
+    const segments: Float32Array[] = [];
+    let current: number[] = [];
+    let count = 0;
+
+    const flush = () => {
+        if (current.length >= 6) { // at least 2 vertices
+            segments.push(new Float32Array(current));
+            count += current.length / 3;
+        }
+        current = [];
+    };
+
+    for (let i = 0; i < pts.length; i += 3) {
+        const x = pts[i];
+        const y = pts[i + 1];
+        const z = pts[i + 2];
+        if (Number.isFinite(x) && Number.isFinite(y) && Number.isFinite(z)) {
+            current.push(x, y, z);
+        } else {
+            flush();
+        }
+    }
+    flush();
+
+    const positions = new Float32Array(segments.reduce((s, seg) => s + seg.length, 0));
+    let off = 0;
+    for (const seg of segments) {
+        positions.set(seg, off);
+        off += seg.length;
+    }
+
+    return { segments, positions, count };
 }

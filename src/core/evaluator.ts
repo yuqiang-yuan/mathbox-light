@@ -26,9 +26,8 @@ export class SimpleEvaluator implements Evaluator {
         const result = fn.evaluate(scope);
         // mathjs may return complex/units/etc.; coerce to number.
         const n = typeof result === "number" ? result : Number(result);
-        if (Number.isNaN(n)) {
-            throw new Error(`Expression "${expr}" did not evaluate to a number`);
-        }
-        return n;
+        // Return NaN for any non-finite result (NaN, ±Infinity, complex, etc.)
+        // so callers can filter invalid sample points without try/catch.
+        return Number.isFinite(n) ? n : NaN;
     }
 }

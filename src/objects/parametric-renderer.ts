@@ -14,7 +14,7 @@ import { hexToColor } from "../core/color.js";
 import { makeLabelSprite } from "../core/label.js";
 
 export class ParametricRenderer extends ObjectRenderer<ParametricCurveObject> {
-    private line: Line2 | null = null;
+    private lines: Line2[] = [];
     private labelSprite: THREE.Sprite | null = null;
     private material: LineMaterial;
     private evaluator: Evaluator;
@@ -38,18 +38,21 @@ export class ParametricRenderer extends ObjectRenderer<ParametricCurveObject> {
 
     update(obj: ParametricCurveObject): void {
         const data = sampleParametric(obj, this.evaluator, this.scope);
-        this.disposeLine();
+        this.disposeLines();
         this.disposeLabel();
 
-        const geom = new LineGeometry();
-        geom.setPositions(Array.from(data.positions));
         this.material.color = hexToColor(obj.color);
         this.material.linewidth = obj.width;
         this.material.opacity = obj.opacity;
 
-        this.line = new Line2(geom, this.material);
-        this.line.computeLineDistances();
-        this.root.add(this.line);
+        for (const seg of data.segments) {
+            const geom = new LineGeometry();
+            geom.setPositions(Array.from(seg));
+            const line = new Line2(geom, this.material);
+            line.computeLineDistances();
+            this.lines.push(line);
+            this.root.add(line);
+        }
 
         // Label at the end of the curve
         if (obj.showLabel && obj.label && data.positions.length >= 3) {
@@ -80,17 +83,17 @@ export class ParametricRenderer extends ObjectRenderer<ParametricCurveObject> {
     }
 
     dispose(): void {
-        this.disposeLine();
+        this.disposeLines();
         this.disposeLabel();
         this.material.dispose();
     }
 
-    private disposeLine(): void {
-        if (this.line) {
-            this.root.remove(this.line);
-            this.line.geometry.dispose();
-            this.line = null;
+    private disposeLines(): void {
+        for (const line of this.lines) {
+            this.root.remove(line);
+            line.geometry.dispose();
         }
+        this.lines = [];
     }
 
     private disposeLabel(): void {
