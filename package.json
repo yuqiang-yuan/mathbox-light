@@ -20,11 +20,30 @@
   },
   "files": [
     "dist",
-    "README.md"
+    "README.md",
+    "LICENSE"
   ],
+  "keywords": [
+    "mathbox",
+    "three.js",
+    "webgl",
+    "3d",
+    "math",
+    "visualization",
+    "plotting"
+  ],
+  "author": "yuqiang-yuan",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/yuqiang-yuan/mathbox-next.git"
+  },
+  "homepage": "https://github.com/yuqiang-yuan/mathbox-next#readme",
+  "bugs": {
+    "url": "https://github.com/yuqiang-yuan/mathbox-next/issues"
+  },
   "dependencies": {
-    "mathjs": "^15.2.0",
-    "three": "^0.185.0"
+    "mathjs": "^15.2.0"
   },
   "devDependencies": {
     "@types/three": "^0.185.1",
