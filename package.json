@@ -1,6 +1,6 @@
 {
   "name": "mathbox-next",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Lightweight TypeScript math visualization library built on three.js r185",
   "type": "module",
   "main": "./dist/index.js",
