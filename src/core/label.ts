@@ -9,7 +9,7 @@ import * as THREE from "three";
  *
  * - Return an `HTMLCanvasElement` or `HTMLImageElement` to use it directly as
  *   the sprite texture (the caller handles all rendering/styling).
- * - Return a `string` to fall back to mathbox-light's built-in plain-text
+ * - Return a `string` to fall back to mathbox-next's built-in plain-text
  *   canvas rendering, using the returned string instead of the original input.
  */
 export type LabelRenderer = (text: string, color: string) => HTMLCanvasElement | HTMLImageElement | string;

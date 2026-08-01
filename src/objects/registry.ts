@@ -37,7 +37,7 @@ export function createRenderer(
 ): ObjectRenderer | null {
     const factory = registry.get(type);
     if (!factory) {
-        console.warn(`[mathbox-light] No renderer registered for type "${type}"`);
+        console.warn(`[mathbox-next] No renderer registered for type "${type}"`);
         return null;
     }
     return factory(parent, evaluator, scope, resolution);

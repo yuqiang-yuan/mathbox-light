@@ -1,4 +1,4 @@
-# mathbox-light
+# mathbox-next
 
 Lightweight 3D math visualization library built on [three.js](https://threejs.org/) r185 and TypeScript. Inspired by [MathBox](https://github.com/unconed/mathbox), but rewritten from scratch with a simplified architecture — no threestrap, no ShaderGraph, no data-as-texture GPU pipeline, no legacy three.js APIs.
 
@@ -11,14 +11,14 @@ MathBox is a powerful library, but it was built on three.js r71 (2014) and depen
 - **`window.THREE` global pollution** — the bundle overwrites `window.THREE`, conflicting with any other three.js usage on the same page
 - **Internal API breakage** — `renderer.state`, `renderer.properties`, deprecated uniform type strings
 
-mathbox-light sidesteps all of this by using standard ESM imports of modern three.js directly. No globals, no patches, no SSR workarounds.
+mathbox-next sidesteps all of this by using standard ESM imports of modern three.js directly. No globals, no patches, no SSR workarounds.
 
 ## Install
 
 ```bash
-npm install mathbox-light three
+npm install mathbox-next three
 # or
-yarn add mathbox-light three
+yarn add mathbox-next three
 ```
 
 > `three` is a peer dependency — you bring your own version (≥0.160.0).
@@ -26,7 +26,7 @@ yarn add mathbox-light three
 ## Quick Start
 
 ```ts
-import { MathBoxController, createDefaultScene } from "mathbox-light";
+import { MathBoxController, createDefaultScene } from "mathbox-next";
 
 const container = document.getElementById("container")!;
 const scene = createDefaultScene();
@@ -192,7 +192,7 @@ const controller = new MathBoxController(container, scene);
 All types are exported from the package root:
 
 ```ts
-import type { MathScene, SceneObject, FunctionObject, SurfaceObject, ... } from "mathbox-light";
+import type { MathScene, SceneObject, FunctionObject, SurfaceObject, ... } from "mathbox-next";
 ```
 
 ## Extending
@@ -202,7 +202,7 @@ import type { MathScene, SceneObject, FunctionObject, SurfaceObject, ... } from 
 Register a new scene object type by implementing `ObjectRenderer` and registering it:
 
 ```ts
-import { ObjectRenderer, registerRenderer } from "mathbox-light";
+import { ObjectRenderer, registerRenderer } from "mathbox-next";
 import * as THREE from "three";
 
 class SphereRenderer extends ObjectRenderer<MySphereObject> {
@@ -239,7 +239,7 @@ registerRenderer("sphere", (parent, evaluator, scope, resolution) =>
 The default `SimpleEvaluator` uses `new Function` for expression evaluation. For untrusted input, swap in a sandboxed parser:
 
 ```ts
-import type { Evaluator, EvalScope } from "mathbox-light";
+import type { Evaluator, EvalScope } from "mathbox-next";
 
 class MathJSEvaluator implements Evaluator {
     eval(expr: string, scope: EvalScope): number {
