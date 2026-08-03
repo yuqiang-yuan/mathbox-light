@@ -5,7 +5,7 @@
 
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
-import type { MathScene, AxisConfig, Vec3 } from "../types/index.js";
+import type { MathScene, AxisConfig, Vec3, CameraPose } from "../types/index.js";
 import { hexToNumber } from "../core/color.js";
 import { makeLabelSprite } from "../core/label.js";
 import type { LabelRenderer } from "../core/label.js";
@@ -344,6 +344,21 @@ export class SceneEnvironment {
 
     render(): void {
         this.renderer.render(this.scene, this.camera);
+    }
+
+    /** Read the current camera position + target as a pose snapshot. */
+    getCameraPose(): CameraPose {
+        return {
+            position: [this.camera.position.x, this.camera.position.y, this.camera.position.z],
+            target: [this.controls.target.x, this.controls.target.y, this.controls.target.z],
+        };
+    }
+
+    /** Instantly apply a camera pose (no animation). */
+    applyCameraPose(pose: CameraPose): void {
+        this.camera.position.set(...pose.position);
+        this.controls.target.set(...pose.target);
+        this.controls.update();
     }
 
     dispose(): void {

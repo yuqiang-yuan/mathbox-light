@@ -17,7 +17,7 @@
  */
 
 import * as THREE from "three";
-import type { MathScene, SceneObject, Parameter, Vec3 } from "../types/index.js";
+import type { MathScene, SceneObject, Parameter, Vec3, CameraPose } from "../types/index.js";
 import { SceneEnvironment } from "./environment.js";
 import type { LabelRenderer } from "./environment.js";
 import { SimpleEvaluator } from "../core/evaluator.js";
@@ -54,6 +54,16 @@ export class MathBoxController {
     /** Snapshot of last applied camera config, to detect panel-driven changes. */
     private lastCameraConfig: { position: Vec3; lookAt: Vec3; originPosition: [number, number] | undefined };
     private labelRenderer?: LabelRenderer;
+    /** Active camera animation (null when idle). */
+    private cameraAnim: {
+        startPos: THREE.Vector3;
+        startTarget: THREE.Vector3;
+        endPos: THREE.Vector3;
+        endTarget: THREE.Vector3;
+        startTime: number;
+        duration: number;
+        savedControls: { rotate: boolean; zoom: boolean; pan: boolean };
+    } | null = null;
 
     constructor(container: HTMLElement, scene: MathScene, options?: MathBoxControllerOptions) {
         registerDefaultRenderers();
@@ -80,6 +90,11 @@ export class MathBoxController {
         // Auto-fit camera after renderers are built
         if (scene.config.camera.autoFit) {
             this.runAutoFit();
+        }
+
+        // If a saved pose exists, animate from the initial view to the saved pose.
+        if (scene.config.camera.savedPose) {
+            this.animateToCameraPose(scene.config.camera.savedPose);
         }
     }
 
@@ -155,10 +170,18 @@ export class MathBoxController {
         if (cam.autoFit) {
             this.runAutoFit();
             this.syncCameraSnapshot(cam);
+        } else if (cam.savedPose && !this.poseEqual(cam.savedPose, this.env.getCameraPose())) {
+            this.animateToCameraPose(cam.savedPose);
+            this.syncCameraSnapshot(cam);
         } else if (posChanged || lookChanged || originChanged) {
             this.env.updateCamera(scene);
             this.syncCameraSnapshot(cam);
         }
+    }
+
+    /** Compare a CameraPose to the current live camera state. */
+    private poseEqual(pose: CameraPose, live: CameraPose): boolean {
+        return vec3Equal(pose.position, live.position) && vec3Equal(pose.target, live.target);
     }
 
     /** Apply per-axis scale to the objectsRoot group so rendered objects
@@ -202,11 +225,84 @@ export class MathBoxController {
         this.runAutoFit();
     }
 
+    /** Get the current camera position + target as a pose snapshot. */
+    getCameraPose(): CameraPose {
+        return this.env.getCameraPose();
+    }
+
+    /** Instantly apply a camera pose (no animation). */
+    applyCameraPose(pose: CameraPose): void {
+        this.cancelCameraAnim();
+        this.env.applyCameraPose(pose);
+    }
+
+    /**
+     * Animate the camera from its current pose to the target pose over
+     * `duration` ms (default 800). User interaction is disabled during
+     * the animation and restored afterwards.
+     */
+    animateToCameraPose(pose: CameraPose, duration = 800): void {
+        this.cancelCameraAnim();
+
+        const controls = this.env.controls;
+        this.cameraAnim = {
+            startPos: this.env.camera.position.clone(),
+            startTarget: controls.target.clone(),
+            endPos: new THREE.Vector3(...pose.position),
+            endTarget: new THREE.Vector3(...pose.target),
+            startTime: performance.now(),
+            duration,
+            savedControls: {
+                rotate: controls.enableRotate,
+                zoom: controls.enableZoom,
+                pan: controls.enablePan,
+            },
+        };
+        // Disable user interaction during animation.
+        controls.enableRotate = false;
+        controls.enableZoom = false;
+        controls.enablePan = false;
+    }
+
+    /** Cancel any in-progress camera animation, restoring controls. */
+    private cancelCameraAnim(): void {
+        if (!this.cameraAnim) return;
+        const controls = this.env.controls;
+        controls.enableRotate = this.cameraAnim.savedControls.rotate;
+        controls.enableZoom = this.cameraAnim.savedControls.zoom;
+        controls.enablePan = this.cameraAnim.savedControls.pan;
+        this.cameraAnim = null;
+    }
+
+    /** Advance the camera animation by one frame. Called from the render loop. */
+    private updateCameraAnim(): void {
+        if (!this.cameraAnim) return;
+        const anim = this.cameraAnim;
+        const elapsed = performance.now() - anim.startTime;
+        const t = Math.min(elapsed / anim.duration, 1);
+        // easeInOutCubic
+        const ease = t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+
+        this.env.camera.position.lerpVectors(anim.startPos, anim.endPos, ease);
+        this.env.controls.target.lerpVectors(anim.startTarget, anim.endTarget, ease);
+        this.env.controls.update();
+
+        if (t >= 1) {
+            // Animation complete — restore controls.
+            const controls = this.env.controls;
+            controls.enableRotate = anim.savedControls.rotate;
+            controls.enableZoom = anim.savedControls.zoom;
+            controls.enablePan = anim.savedControls.pan;
+            this.cameraAnim = null;
+        }
+    }
+
     /** Start the render loop. */
     start(): void {
         const loop = () => {
             if (this.disposed) return;
             this.animationId = requestAnimationFrame(loop);
+            this.updateCameraAnim();
             this.env.controls.update();
             this.env.render();
         };
@@ -222,6 +318,7 @@ export class MathBoxController {
     dispose(): void {
         this.disposed = true;
         this.stop();
+        this.cancelCameraAnim();
         for (const renderer of Array.from(this.renderers.values())) {
             renderer.dispose();
         }

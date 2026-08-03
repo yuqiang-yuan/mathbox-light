@@ -25,6 +25,12 @@ export type Vec3 = [number, number, number];
 /** Numeric range [min, max]. */
 export type Range = [number, number];
 
+/** Saved camera pose (position + look-at target) for view restoration. */
+export interface CameraPose {
+    position: Vec3;
+    target: Vec3;
+}
+
 /** 3D bounding box. */
 export interface Bounds3D {
     min: Vec3;
@@ -259,6 +265,13 @@ export interface SceneConfig {
          * Overrides manual position/lookAt/originPosition.
          */
         autoFit?: boolean;
+        /**
+         * A camera pose saved by the user after manually adjusting the view
+         * (rotate/zoom/pan). When present, the controller animates from the
+         * initial camera position to this pose on load.
+         * Differs from `position`/`lookAt` which is the designer-set initial view.
+         */
+        savedPose?: CameraPose;
     };
 }
 

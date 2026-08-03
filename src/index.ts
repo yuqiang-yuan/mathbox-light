@@ -13,6 +13,7 @@ export type {
     ColormapName,
     Vec3,
     Range,
+    CameraPose,
     Bounds3D,
     SceneObjectBase,
     FunctionObject,
