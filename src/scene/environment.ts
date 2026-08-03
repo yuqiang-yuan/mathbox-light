@@ -155,51 +155,85 @@ export class SceneEnvironment {
         if (!grid.visible) return;
 
         const { x, y, z } = scene.config.axes;
-        const xSize = (x.range[1] - x.range[0]) * x.scale;
-        const ySize = (y.range[1] - y.range[0]) * y.scale;
-        const zSize = (z.range[1] - z.range[0]) * z.scale;
 
-        const planes: { plane: "xy" | "xz" | "yz"; size: number; divisions: number }[] = [];
+        type PlaneName = "xy" | "xz" | "yz";
+        const planes: PlaneName[] = [];
+        if (grid.xy?.visible !== false) planes.push("xy");
+        if (grid.xz?.visible !== false) planes.push("xz");
+        if (grid.yz?.visible !== false) planes.push("yz");
 
-        // XY plane (z=0): spans x × y
-        if (grid.xy?.visible !== false) {
-            const step = grid.xy?.step ?? 1;
-            const size = Math.max(xSize, ySize);
-            planes.push({ plane: "xy", size, divisions: Math.max(1, Math.round(size / step)) });
-        }
-        // XZ plane (y=0): spans x × z
-        if (grid.xz?.visible !== false) {
-            const step = grid.xz?.step ?? 1;
-            const size = Math.max(xSize, zSize);
-            planes.push({ plane: "xz", size, divisions: Math.max(1, Math.round(size / step)) });
-        }
-        // YZ plane (x=0): spans y × z
-        if (grid.yz?.visible !== false) {
-            const step = grid.yz?.step ?? 1;
-            const size = Math.max(ySize, zSize);
-            planes.push({ plane: "yz", size, divisions: Math.max(1, Math.round(size / step)) });
-        }
-
-        for (const { plane, size, divisions } of planes) {
+        for (const plane of planes) {
             const planeCfg = grid[plane];
+            const step = planeCfg?.step ?? 1;
             const color = planeCfg?.color ? hexToNumber(planeCfg.color) : 0xcccccc;
             const opacity = planeCfg?.opacity ?? 0.5;
             const mat = new THREE.LineBasicMaterial({ color, transparent: true, opacity });
 
-            const helper = new THREE.GridHelper(size, divisions, color, color);
-            helper.material = mat;
+            // Two axes that span this plane, with their ranges and scales.
+            let aRange: [number, number], aScale: number;
+            let bRange: [number, number], bScale: number;
+            let aIdx: 0 | 1 | 2, bIdx: 0 | 1 | 2;
 
-            // GridHelper is built on the XZ plane by default (Y=0).
-            // XY plane (z=0): rotate 90° around X.
-            // YZ plane (x=0): rotate 90° around Z, then 90° around X.
             if (plane === "xy") {
-                helper.rotation.x = Math.PI / 2;
-            } else if (plane === "yz") {
-                helper.rotation.z = Math.PI / 2;
-                helper.rotation.x = Math.PI / 2;
+                aRange = x.range; aScale = x.scale; aIdx = 0;
+                bRange = y.range; bScale = y.scale; bIdx = 1;
+            } else if (plane === "xz") {
+                aRange = x.range; aScale = x.scale; aIdx = 0;
+                bRange = z.range; bScale = z.scale; bIdx = 2;
+            } else {
+                aRange = y.range; aScale = y.scale; aIdx = 1;
+                bRange = z.range; bScale = z.scale; bIdx = 2;
             }
 
-            this.gridGroup.add(helper);
+            // Generate grid line positions from origin outward, stopping at axis range.
+            // step is in data space (axis units); positions are then scaled to world space.
+            const genLines = (range: [number, number], scale: number): number[] => {
+                const [min, max] = range;
+                const lines: number[] = [];
+                // Positive direction from origin
+                for (let v = 0; v <= max + 1e-9; v += step) {
+                    lines.push(v * scale);
+                }
+                // Negative direction from origin (skip 0, already added)
+                for (let v = -step; v >= min - 1e-9; v -= step) {
+                    lines.push(v * scale);
+                }
+                return lines;
+            };
+
+            const aLines = genLines(aRange, aScale);
+            const bLines = genLines(bRange, bScale);
+
+            // Plane bounds (axis range × scale) for line endpoints.
+            const aMin = aRange[0] * aScale;
+            const aMax = aRange[1] * aScale;
+            const bMin = bRange[0] * bScale;
+            const bMax = bRange[1] * bScale;
+
+            const points: THREE.Vector3[] = [];
+
+            // Helper to create a point on the plane.
+            const mkPoint = (av: number, bv: number): THREE.Vector3 => {
+                const p: [number, number, number] = [0, 0, 0];
+                p[aIdx] = av;
+                p[bIdx] = bv;
+                return new THREE.Vector3(...p);
+            };
+
+            // Lines along b-axis at each a-line position.
+            for (const av of aLines) {
+                points.push(mkPoint(av, bMin));
+                points.push(mkPoint(av, bMax));
+            }
+            // Lines along a-axis at each b-line position.
+            for (const bv of bLines) {
+                points.push(mkPoint(aMin, bv));
+                points.push(mkPoint(aMax, bv));
+            }
+
+            const geom = new THREE.BufferGeometry().setFromPoints(points);
+            const segs = new THREE.LineSegments(geom, mat);
+            this.gridGroup.add(segs);
         }
     }
 
