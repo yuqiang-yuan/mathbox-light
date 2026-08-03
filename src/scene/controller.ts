@@ -141,7 +141,11 @@ export class MathBoxController {
             }
         }
 
-        // Camera: only apply when the panel-driven config actually changed.
+        // Always sync control enable flags (rotate/zoom/pan) — these don't
+        // affect camera pose, so it's safe to apply on every update.
+        this.env.syncControls(scene);
+
+        // Camera pose: only apply when the panel-driven config actually changed.
         // This preserves the user's mouse-driven camera state (orbit/pan/zoom).
         const cam = scene.config.camera;
         const posChanged = !vec3Equal(cam.position, this.lastCameraConfig.position);

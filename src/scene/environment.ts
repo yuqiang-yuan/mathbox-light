@@ -247,6 +247,15 @@ export class SceneEnvironment {
         this.applyCamera(scene);
     }
 
+    /** Sync only the control enable flags (rotate/zoom/pan) without
+     *  touching camera position/lookAt — safe to call on every scene update
+     *  because it never overrides the user's mouse-driven camera state. */
+    syncControls(scene: MathScene): void {
+        this.controls.enableRotate = scene.config.camera.canRotate;
+        this.controls.enableZoom = scene.config.camera.canZoom;
+        this.controls.enablePan = scene.config.camera.canPan;
+    }
+
     /**
      * Apply auto-fit camera settings computed from scene bounds.
      * Temporarily replaces the scene's camera config with the computed values.
