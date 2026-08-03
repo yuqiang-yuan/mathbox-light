@@ -43,11 +43,20 @@ export function sampleFunction(
     const n = Math.max(2, obj.samples);
     const dx = (xMax - xMin) / (n - 1);
 
-    const pts: number[] = [];
+    // First pass: sample all points.
+    const xs: number[] = [];
+    const ys: number[] = [];
     for (let i = 0; i < n; i++) {
         const x = xMin + i * dx;
-        const y = evaluator.eval(obj.expr, { ...scope, x });
-        pts.push(x, y, 0);
+        xs.push(x);
+        ys.push(evaluator.eval(obj.expr, { ...scope, x }));
+    }
+
+    detectDiscontinuities1D(xs, ys, (x) => evaluator.eval(obj.expr, { ...scope, x }));
+
+    const pts: number[] = [];
+    for (let i = 0; i < n; i++) {
+        pts.push(xs[i], ys[i], 0);
     }
     return buildLineData(pts);
 }
@@ -128,20 +137,116 @@ export function sampleParametric(
     const n = Math.max(2, obj.samples);
     const dt = (tMax - tMin) / (n - 1);
 
-    const pts: number[] = [];
+    // First pass: sample all points.
+    const ts: number[] = [];
+    const xs: number[] = [];
+    const ys: number[] = [];
+    const zs: number[] = [];
     for (let i = 0; i < n; i++) {
         const t = tMin + i * dt;
         const s = { ...scope, t };
-        pts.push(
-            evaluator.eval(obj.exprX, s),
-            evaluator.eval(obj.exprY, s),
-            evaluator.eval(obj.exprZ, s),
-        );
+        ts.push(t);
+        xs.push(evaluator.eval(obj.exprX, s));
+        ys.push(evaluator.eval(obj.exprY, s));
+        zs.push(evaluator.eval(obj.exprZ, s));
+    }
+
+    // Detect discontinuities on each axis independently; if any axis is
+    // discontinuous at a given index, mark the point as NaN on all axes
+    // so buildLineData breaks the segment there.
+    const evalExpr = (expr: string, t: number) =>
+        evaluator.eval(expr, { ...scope, t });
+
+    const breaks = new Set<number>();
+    for (const vals of [xs, ys, zs]) {
+        const expr = vals === xs ? obj.exprX : vals === ys ? obj.exprY : obj.exprZ;
+        detectDiscontinuities1D(ts, vals, (t: number) => evalExpr(expr, t));
+        for (let i = 0; i < n; i++) {
+            if (Number.isNaN(vals[i])) breaks.add(i);
+        }
+    }
+
+    const pts: number[] = [];
+    for (let i = 0; i < n; i++) {
+        if (breaks.has(i)) {
+            pts.push(NaN, NaN, NaN);
+        } else {
+            pts.push(xs[i], ys[i], zs[i]);
+        }
     }
     return buildLineData(pts);
 }
 
 // ---------------------------------------------------------------------------
+
+/**
+ * Detect discontinuities (asymptotes) in sampled 1D data using the midpoint test.
+ *
+ * For each pair of adjacent finite samples, if the slope is steep relative to
+ * the median slope, the midpoint is evaluated. If the midpoint value deviates
+ * significantly from linear interpolation of the two endpoints, the segment is
+ * deemed discontinuous and the **second** point is set to NaN (so buildLineData
+ * breaks the line there).
+ *
+ * `ys` is mutated in place.
+ *
+ * @param xs        Sample positions (monotonic).
+ * @param ys        Sample values (parallel to xs). Mutated.
+ * @param evalAt    Function to evaluate the underlying expression at an arbitrary x.
+ */
+function detectDiscontinuities1D(
+    xs: number[],
+    ys: number[],
+    evalAt: (x: number) => number,
+): void {
+    const n = xs.length;
+    if (n < 2) return;
+
+    // Compute absolute slopes of all adjacent finite pairs.
+    const slopes: number[] = [];
+    for (let i = 0; i < n - 1; i++) {
+        if (Number.isFinite(ys[i]) && Number.isFinite(ys[i + 1])) {
+            slopes.push(Math.abs((ys[i + 1] - ys[i]) / (xs[i + 1] - xs[i])));
+        }
+    }
+    if (slopes.length === 0) return;
+
+    // Median slope — robust against asymptote outliers.
+    const sorted = [...slopes].sort((a, b) => a - b);
+    const median = sorted[Math.floor(sorted.length / 2)] || 1;
+
+    // A segment is "steep" if its slope exceeds 10× the median.
+    // For steep segments, sample the midpoint and compare to linear interpolation.
+    const STEEP_FACTOR = 10;
+    // If midpoint deviates from the interpolation by more than this fraction of
+    // the segment's y-range, it's a discontinuity.
+    const DEVIATION_RATIO = 0.5;
+
+    for (let i = 0; i < n - 1; i++) {
+        const y0 = ys[i];
+        const y1 = ys[i + 1];
+        if (!Number.isFinite(y0) || !Number.isFinite(y1)) continue;
+
+        const dx = xs[i + 1] - xs[i];
+        const slope = Math.abs((y1 - y0) / dx);
+        if (slope <= median * STEEP_FACTOR) continue;
+
+        // Steep segment — evaluate midpoint.
+        const midX = (xs[i] + xs[i + 1]) / 2;
+        const midY = evalAt(midX);
+        if (!Number.isFinite(midY)) continue; // NaN midpoint → already handled by buildLineData
+
+        const midLinear = (y0 + y1) / 2;
+        const yRange = Math.abs(y1 - y0);
+        if (yRange < 1e-12) continue;
+
+        const deviation = Math.abs(midY - midLinear) / yRange;
+        if (deviation > DEVIATION_RATIO) {
+            // Discontinuity: break the segment by NaN-ing the second point.
+            ys[i + 1] = NaN;
+        }
+    }
+}
 
 /**
  * Convert a flat [x,y,z, x,y,z, ...] array of sample points into
